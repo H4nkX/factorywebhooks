@@ -191,9 +191,69 @@ app.post('/api/send/markdown/:webhook?', async (req, res) => {
   }
 });
 
-// 根路径路由
+// 根路径路由 - GET 请求
 app.get('/', (req, res) => {
-  res.send('OK');
+  res.send('请调用 POST 请求来发送消息');
+});
+
+// 根路径路由 - POST 请求（处理 TrendMiner 的调用）
+app.post('/', async (req, res) => {
+  try {
+    // 默认使用 default webhook
+    const webhook = webhooks.default;
+    
+    // 检查频率限制
+    if (!checkRateLimit('default')) {
+      return res.status(429).json({ error: 'Rate limit exceeded. Please try again later.' });
+    }
+    
+    // 验证请求体
+    if (!req.body || typeof req.body !== 'object') {
+      return res.status(400).json({ error: 'Invalid request body. Must be a JSON object.' });
+    }
+    
+    // 从请求体中获取 content
+    const { content } = req.body;
+    
+    if (!content || typeof content !== 'string' || content.trim() === '') {
+      return res.status(400).json({ error: 'Content is required and must be a non-empty string.' });
+    }
+    
+    // 获取当前时间
+    const now = new Date();
+    const timestamp = now.toLocaleString('zh-CN', {
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+      hour: '2-digit',
+      minute: '2-digit',
+      second: '2-digit',
+      timeZone: 'Asia/Shanghai'
+    });
+    
+    // 构建消息对象
+    const message = {
+      msgtype: 'text',
+      text: {
+        content: `请注意有问题\n${content.trim()}\n时间：${timestamp}`
+      }
+    };
+    
+    // 发送消息到企业微信
+    const result = await sendToWechat(webhook.url, message);
+    
+    // 检查企业微信返回的错误
+    if (result.errcode !== 0) {
+      console.error('WeChat API error:', result);
+      return res.status(400).json(result);
+    }
+    
+    // 返回成功响应
+    res.json(result);
+  } catch (error) {
+    console.error('Server error:', error);
+    res.status(500).json({ error: 'Internal server error', details: error.message });
+  }
 });
 
 // Vercel 会自动处理服务器启动，不需要手动调用 app.listen()
