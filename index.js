@@ -207,18 +207,6 @@ app.post('/', async (req, res) => {
       return res.status(429).json({ error: 'Rate limit exceeded. Please try again later.' });
     }
     
-    // 验证请求体
-    if (!req.body || typeof req.body !== 'object') {
-      return res.status(400).json({ error: 'Invalid request body. Must be a JSON object.' });
-    }
-    
-    // 从请求体中获取 content
-    const { content } = req.body;
-    
-    if (!content || typeof content !== 'string' || content.trim() === '') {
-      return res.status(400).json({ error: 'Content is required and must be a non-empty string.' });
-    }
-    
     // 获取当前时间
     const now = new Date();
     const timestamp = now.toLocaleString('zh-CN', {
@@ -231,28 +219,61 @@ app.post('/', async (req, res) => {
       timeZone: 'Asia/Shanghai'
     });
     
+    // 处理 TrendMiner 发送的复杂 JSON 对象
+    let content = 'TrendMiner 触发了 webhook 调用';
+    
+    if (req.body && typeof req.body === 'object') {
+      // 从 TrendMiner 的 JSON 中提取有用信息
+      const { 
+        resultId, 
+        resultScore, 
+        resultUrl, 
+        searchName, 
+        webhookCallEvent, 
+        webhookCallTime 
+      } = req.body;
+      
+      // 构建有意义的消息内容
+      content = `TrendMiner 监控告警\n` +
+                `事件类型: ${webhookCallEvent || '未知'}\n` +
+                `结果 ID: ${resultId || '未知'}\n` +
+                `结果分数: ${resultScore || '未知'}\n` +
+                `搜索名称: ${searchName || '未知'}\n` +
+                `触发时间: ${webhookCallTime || '未知'}\n` +
+                `查看详情: ${resultUrl || '无链接'}`;
+    } else if (req.body && typeof req.body === 'string') {
+      // 如果请求体是字符串，直接使用
+      content = req.body.trim();
+    }
+    
     // 构建消息对象
     const message = {
       msgtype: 'text',
       text: {
-        content: `请注意有问题\n${content.trim()}\n时间：${timestamp}`
+        content: `请注意有问题\n${content}\n时间：${timestamp}`
       }
     };
     
     // 发送消息到企业微信
     const result = await sendToWechat(webhook.url, message);
     
-    // 检查企业微信返回的错误
-    if (result.errcode !== 0) {
-      console.error('WeChat API error:', result);
-      return res.status(400).json(result);
-    }
+    // 记录企业微信返回的结果
+    console.log('WeChat API response:', result);
     
-    // 返回成功响应
-    res.json(result);
+    // 无论企业微信返回什么，都返回 200 状态码给 TrendMiner
+    res.status(200).json({
+      status: 'ok',
+      message: '消息已发送',
+      wechatResult: result
+    });
   } catch (error) {
     console.error('Server error:', error);
-    res.status(500).json({ error: 'Internal server error', details: error.message });
+    // 即使发生错误，也返回 200 状态码给 TrendMiner
+    res.status(200).json({
+      status: 'ok',
+      message: '消息发送过程中出现错误，但已记录',
+      error: error.message
+    });
   }
 });
 
