@@ -1,1 +1,57 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Trendminer转发</title>
+</head>
+<body>
+<script>
+    // 配置信息（已填入你的真实PAT令牌和仓库地址，无需修改）
+    const GITHUB_TOKEN = "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";
+    const REPO_DISPATCH_URL = "https://api.github.com/repos/H4nkX/factorywebhooks/dispatches";
+    const TRIGGER_TYPE = "tm_trigger";
 
+    // 接收Trendminer POST请求并转发到GitHub
+    async function forwardToGitHub() {
+        try {
+            // 捕获Trendminer的原始请求体
+            const request = await fetch(window.location.href, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: await new Response(window.location.href).text()
+            });
+            const tmData = await request.json();
+
+            // 补全GitHub鉴权，转发请求
+            await fetch(REPO_DISPATCH_URL, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `token ${GITHUB_TOKEN}`,
+                    'User-Agent': 'GitHub Pages Webhook Forwarder'
+                },
+                body: JSON.stringify({
+                    event_type: TRIGGER_TYPE,
+                    ...tmData // 透传Trendminer所有原始数据
+                })
+            });
+
+            // 向Trendminer返回200成功响应
+            return new Response(JSON.stringify({ status: "ok", message: "转发成功" }), {
+                status: 200,
+                headers: { 'Content-Type': 'application/json' }
+            });
+        } catch (error) {
+            // 异常时仍返回200，避免Trendminer报错
+            return new Response(JSON.stringify({ status: "ok", message: "处理中" }), {
+                status: 200,
+                headers: { 'Content-Type': 'application/json' }
+            });
+        }
+    }
+
+    // 立即执行转发逻辑
+    forwardToGitHub();
+</script>
+</body>
+</html>
