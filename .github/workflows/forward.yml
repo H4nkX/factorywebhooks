@@ -1,17 +1,25 @@
 name: Trendminer转发到企业微信
 on:
+  workflow_dispatch:
+    inputs:
+      tm_data:
+        description: "Trendminer原始数据"
+        required: true
+        type: string
   repository_dispatch:
-    types: [tm_trigger] # 与中转脚本的TRIGGER_TYPE一致
-  workflow_dispatch: # 支持手动测试
+    types: [tm_trigger]
 
 jobs:
   run-forward:
     runs-on: ubuntu-latest
+    permissions:
+      actions: write
+      contents: read
     steps:
       - name: 拉取仓库代码
         uses: actions/checkout@v4
 
-      - name: 配置Node.js环境
+      - name: 配置Node.js
         uses: actions/setup-node@v4
         with:
           node-version: 20
@@ -19,17 +27,17 @@ jobs:
       - name: 安装依赖
         run: npm install
 
-      - name: 启动Node.js服务
+      - name: 启动Node服务
         run: |
           npm start &
-          sleep 5 # 等待服务完全启动
+          sleep 5
 
-      - name: 转发Trendminer消息到服务
+      - name: 转发消息到服务
         env:
-          TM_DATA: ${{ toJSON(github.event.client_payload) }}
+          TM_DATA: ${{ github.event.inputs.tm_data || toJSON(github.event.client_payload) }}
         run: |
           curl -X POST \
             -H "Content-Type: application/json" \
-            -d "$TM_DATA" \
+            -d "{\"tm_data\": \"$TM_DATA\"}" \
             http://localhost:3000/
           echo -e "\n转发完成"
