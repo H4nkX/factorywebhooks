@@ -1,12 +1,17 @@
-name: Trendminer转发到企业微信（最终版）
-# 触发方式：匹配前端的tm_trigger事件 + 保留手动触发（双重触发）
+name: TrendMiner转发到企业微信
+
 on:
   repository_dispatch:
-    types: [tm_trigger] # 前端转发的事件类型
-  workflow_dispatch: # 保留手动触发，方便测试
+    types: [tm_trigger]
+  workflow_dispatch:
     inputs:
+      webhook:
+        description: "目标webhook名称"
+        required: true
+        type: string
+        default: "default"
       tm_data:
-        description: "Trendminer数据（手动测试用）"
+        description: "TrendMiner数据"
         required: true
         type: string
 
@@ -21,21 +26,24 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: 20
-          cache: 'npm' # 缓存依赖，加快运行速度
+          cache: 'npm'
 
       - name: 安装依赖
         run: npm install
 
-      - name: 启动Node服务并后台运行
+      - name: 启动Node服务
         run: |
           npm start &
-          sleep 3 # 缩短等待时间，足够服务启动
+          sleep 3
 
       - name: 转发消息到Node服务
         env:
-          # 优先取repository_dispatch的参数，手动触发时取workflow_dispatch的参数
+          WEBHOOK: ${{ github.event.client_payload.webhook || github.event.inputs.webhook }}
           TM_DATA: ${{ github.event.client_payload.tm_data || github.event.inputs.tm_data }}
         run: |
-          echo "开始转发Trendminer数据..."
-          # 发送POST请求，增加日志输出
-          curl -X POST -H "Content-Type: application/json" -d "{\"tm_data\":\"$TM_DATA\"}" http://localhost:3000/ -v
+          echo "目标webhook: $WEBHOOK"
+          echo "开始转发TrendMiner数据..."
+          curl -X POST \
+            -H "Content-Type: application/json" \
+            -d "{\"webhook\":\"$WEBHOOK\",\"tm_data\":\"$TM_DATA\"}" \
+            http://localhost:3000/
